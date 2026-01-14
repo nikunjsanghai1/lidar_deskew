@@ -68,6 +68,7 @@ private:
   double max_missing_ratio_;
   bool use_tf_;
   bool use_odom_fallback_;
+  bool rosbag_mode_;  // true: measure processing time, false: measure wall clock latency
 
   // Static transforms (cached)
   bool static_tf_initialized_ = false;

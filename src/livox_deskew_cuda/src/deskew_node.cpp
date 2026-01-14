@@ -3,6 +3,7 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <cstring>
 #include <limits>
+#include <chrono>
 
 namespace livox_deskew_cuda
 {
@@ -21,6 +22,7 @@ DeskewNode::DeskewNode(const rclcpp::NodeOptions & options)
   max_missing_ratio_ = this->declare_parameter<double>("max_missing_ratio", 0.02);
   use_tf_ = this->declare_parameter<bool>("use_tf", true);
   use_odom_fallback_ = this->declare_parameter<bool>("use_odom_fallback", true);
+  rosbag_mode_ = this->declare_parameter<bool>("rosbag_mode", true);  // Default true for rosbag compatibility
 
   pose_buffer_.setBufferDuration(buffer_seconds_);
 
@@ -65,6 +67,7 @@ DeskewNode::DeskewNode(const rclcpp::NodeOptions & options)
   RCLCPP_INFO(this->get_logger(), "  Frames: %s -> %s -> %s",
     odom_frame_.c_str(), base_frame_.c_str(), lidar_frame_.c_str());
   RCLCPP_INFO(this->get_logger(), "  CUDA initialized: %s", cuda_initialized_ ? "yes" : "no");
+  RCLCPP_INFO(this->get_logger(), "  Mode: %s", rosbag_mode_ ? "rosbag (processing time)" : "runtime (wall clock latency)");
 }
 
 DeskewNode::~DeskewNode()
@@ -278,10 +281,30 @@ void DeskewNode::cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr ms
   }
 
   sensor_msgs::msg::PointCloud2 output;
+
+  // Measure processing time
+  auto start_time = std::chrono::high_resolution_clock::now();
+
   if (deskewCloud(*msg, output)) {
     cloud_pub_->publish(output);
-    RCLCPP_DEBUG_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
-      "Published deskewed cloud");
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+
+    double latency_ms;
+    if (rosbag_mode_) {
+      // Rosbag mode: measure actual processing time
+      latency_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+    } else {
+      // Runtime mode: measure wall clock - cloud timestamp
+      rclcpp::Time now = this->now();
+      rclcpp::Time cloud_stamp(output.header.stamp);
+      latency_ms = (now - cloud_stamp).seconds() * 1000.0;
+    }
+
+    RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+      "Deskew %s: %.2f ms",
+      rosbag_mode_ ? "processing time" : "latency",
+      latency_ms);
   }
 }
 

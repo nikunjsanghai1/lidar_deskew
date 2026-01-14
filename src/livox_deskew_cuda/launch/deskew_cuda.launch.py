@@ -60,6 +60,12 @@ def generate_launch_description():
         description='Use odometry topic as fallback'
     )
 
+    rosbag_mode_arg = DeclareLaunchArgument(
+        'rosbag_mode',
+        default_value='true',
+        description='true: measure processing time (for rosbag), false: measure wall clock latency (for runtime)'
+    )
+
     # Create the CUDA deskew node
     deskew_node = Node(
         package='livox_deskew_cuda',
@@ -76,6 +82,7 @@ def generate_launch_description():
             'max_missing_ratio': LaunchConfiguration('max_missing_ratio'),
             'use_tf': LaunchConfiguration('use_tf'),
             'use_odom_fallback': LaunchConfiguration('use_odom_fallback'),
+            'rosbag_mode': LaunchConfiguration('rosbag_mode'),
         }]
     )
 
@@ -89,5 +96,6 @@ def generate_launch_description():
         max_missing_ratio_arg,
         use_tf_arg,
         use_odom_fallback_arg,
+        rosbag_mode_arg,
         deskew_node,
     ])
